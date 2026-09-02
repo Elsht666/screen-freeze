@@ -285,6 +285,14 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       ContextCompat.RECEIVER_EXPORTED
     )
 
+    // Restore the floating overlay if it was enabled before the service was restarted
+    // (e.g. after the OS reclaimed the process in the background). Without this the
+    // floating lock would silently disappear even though the accessibility switch is
+    // still enabled.
+    if (floatingViewStatus.added) {
+      onFloatingViewAdded()
+    }
+
     if (accessibilityPermissionRequestTracker.recentlyLaunchedAccessibilityPermissionRequest()) {
       startActivity(
         Intent(
@@ -455,6 +463,11 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     override fun onReceive(context: Context, intent: Intent) {
       backgroundView.setScreenOn(false)
       lockView.setScreenOn(false)
+      // Screen off means the film session is over: release film-protection mode so the
+      // volume keys work normally again. The floating lock stays for the next session.
+      if (floatingViewStatus.added && floatingViewStatus.locked) {
+        unlock()
+      }
     }
   }
 
@@ -526,9 +539,13 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
   }
 
   // Film-protection mode exit gesture: hold BOTH volume keys for volumeExitDelayMillis.
-  // Every volume key event is consumed (return true) so the system volume never changes
-  // while the film is on.
+  // Volume keys are only consumed (return true) while film-protection mode is active
+  // (overlay added AND locked), so the system volume never changes while the film is on
+  // but keeps working normally outside of film mode.
   override fun onKeyEvent(event: KeyEvent): Boolean {
+    if (!floatingViewStatus.added || !floatingViewStatus.locked) {
+      return false
+    }
     val keyCode = event.keyCode
     if (keyCode != KeyEvent.KEYCODE_VOLUME_UP && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
       return super.onKeyEvent(event)

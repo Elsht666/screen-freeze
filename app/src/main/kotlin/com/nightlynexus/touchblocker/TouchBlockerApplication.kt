@@ -16,10 +16,13 @@ class TouchBlockerApplication : Application() {
   override fun onCreate() {
     super.onCreate()
 
-    floatingViewStatus = FloatingViewStatus(isAccessibilityServiceEnabled(
-      this,
-      TouchBlockerAccessibilityService::class.java
-    ))
+    floatingViewStatus = FloatingViewStatus(
+      getSharedPreferences("floating_view_status", MODE_PRIVATE),
+      isAccessibilityServiceEnabled(
+        this,
+        TouchBlockerAccessibilityService::class.java
+      )
+    )
     keepScreenOnStatus = KeepScreenOnStatus(
       getSharedPreferences(
         "keep_screen_on_status",
