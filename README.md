@@ -1,8 +1,8 @@
-# 贴膜防误触 · Screen Freeze
+ 1-贴膜防误触 · Screen Freeze
 
 手机贴膜时的防误触助手。贴膜过程中一键锁住屏幕触摸，屏幕保持常亮白屏，方便对齐、贴合钢化膜，贴完再解锁。
 
-## 特性
+2-特性
 
 - **贴膜模式**：一键锁定屏幕触摸，覆盖层切换为纯白全屏，贴膜时能清晰看到屏幕边界
 - **屏幕常亮**：锁定后屏幕保持常亮、无状态栏，贴膜过程中不会黑屏
@@ -11,21 +11,34 @@
 - **完全离线**：应用完全离线本地运行，无联网功能，不存储任何数据
 - **中文界面**：全中文汉化，界面极简，只保留必要操作
 
-## 下载
+3-界面预览
+（1.[授权](screenshots/01_home.jpg)
+（2.[权限弹窗](screenshots/02_permission.jpg)
+（3.[授权完成](screenshots/03_ready.jpg)
+（4.[移除](screenshots/04_remove.jpg)
+（5.[锁屏](screenshots/05_locked.jpg)
+（6.[双击恢复](screenshots/06_double_tap.jpg)
+（7.[纯白界面](screenshots/07_white.jpg)
+
+
+
+
+
+4-下载
 
 [下载 APK](https://raw.githubusercontent.com/Elsht666/screen-freeze/main/release/ScreenFreeze.apk)
 
 > 版本：1.3.6-internal · 安装包约 8 MB
 
-## 使用步骤
+5- 使用步骤
 
 1. 安装 APK 后打开应用
 2. 点击「授予权限」，在系统无障碍设置中开启本应用
 3. 返回应用，点击「开启」锁定屏幕触摸（进入贴膜模式）
-4. 贴膜完成后，同时按住音量上 + 音量下 2 秒退出
+4. 贴膜完成后，同时按住音量上 + 音量下 2 秒退出（或者双击屏幕+点击解锁按钮）
 5. 右上角「关于」可查看仓库与开发者信息
 
-## 从源码构建
+ 从源码构建
 
 需要 Android SDK。项目使用 Gradle Wrapper，构建命令：
 
