@@ -12,13 +12,13 @@
 - **中文界面**：全中文汉化，界面极简，只保留必要操作
 
 3-界面预览
-（1.[授权](screenshots/01_home.jpg)
-（2.[权限弹窗](screenshots/02_permission.jpg)
-（3.[授权完成](screenshots/03_ready.jpg)
-（4.[移除](screenshots/04_remove.jpg)
-（5.[锁屏](screenshots/05_locked.jpg)
-（6.[双击恢复](screenshots/06_double_tap.jpg)
-（7.[纯白界面](screenshots/07_white.jpg)
+（1）[授权](screenshots/01_home.jpg)
+（2）[权限弹窗](screenshots/02_permission.jpg)
+（3）[授权完成](screenshots/03_ready.jpg)
+（4）[移除](screenshots/04_remove.jpg)
+（5）[锁屏](screenshots/05_locked.jpg)
+（6）[双击恢复](screenshots/06_double_tap.jpg)
+（7）[纯白界面](screenshots/07_white.jpg)
 
 
 
