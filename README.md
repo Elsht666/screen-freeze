@@ -13,9 +13,10 @@
 
 ## 下载
 
-[下载 APK](release/ScreenFreeze.apk)
+[下载 APK](https://raw.githubusercontent.com/Elsht666/screen-freeze/main/release/ScreenFreeze.apk)
 
-> 版本：1.3.6-internal · 安装包约 9 MB
+> 版本：1.3.6-internal · 安装包约 8 MB
+
 
 ## 使用步骤
 
