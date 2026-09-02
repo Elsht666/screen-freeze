@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tile_label">贴膜防误触</string>
+  <string name="tile_subtitle_grant_permission">授予权限</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">贴膜防误触</string>
+
+  <string name="accessibility_service_label">@string/app_name</string>
+  <string name="accessibility_service_description">贴膜防误触需要此权限来创建透明悬浮窗以拦截屏幕触摸。除此之外，本应用不使用任何其他无障碍功能。</string>
+  <string name="accessibility_service_intro">允许贴膜防误触使用屏幕悬浮窗来拦截触摸</string>
+  <string name="accessibility_service_summary">拦截触摸</string>
+</resources>

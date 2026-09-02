@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="brand_icon_content_description">贴膜防误触图标</string>
+  <string name="enable_button_accessibility_service">授予权限</string>
+  <string name="enable_button_add_floating">开启</string>
+  <string name="enable_button_remove_floating">暂时移除</string>
+  <string name="keep_screen_on">屏幕常亮</string>
+  <string name="change_screen_brightness">调暗屏幕</string>
+  <string name="enable_assistant">助手按钮开关</string>
+  <string name="enable_assistant_toast">将贴膜防误触设为默认助手应用</string>
+  <string name="enable_assistant_toast_disable">更改默认助手应用</string>
+  <string name="float_lock_view_size_label">按钮大小</string>
+  <string name="request_add_tile_service_button">添加快捷磁贴</string>
+  <string name="footer"></string>
+  <string name="size_small">A-</string>
+  <string name="size_normal">A</string>
+  <string name="size_large">A+</string>
+  <string name="size_small_description">缩小</string>
+  <string name="size_normal_description">正常</string>
+  <string name="size_large_description">放大</string>
+  <string name="about_button">关于</string>
+  <string name="about_dialog_title">关于</string>
+  <string name="about_repo_label">仓库位置</string>
+  <string name="about_repo_url">https://github.com/Elsht666/screen-freeze</string>
+  <string name="about_developer_label">开发者</string>
+  <string name="about_developer_name">Elsht</string>
+  <string name="about_button_close">关闭</string>
+</resources>

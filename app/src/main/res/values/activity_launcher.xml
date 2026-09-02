@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+  <style name="LauncherSplash" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/window_background</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+    <item name="postSplashScreenTheme">@style/Launcher</item>
+  </style>
+
+  <style name="Launcher" parent="Theme.Material3.Dark.NoActionBar">
+    <item name="colorPrimary">@color/primary</item>
+    <item name="colorAccent">@color/accent</item>
+    <item name="android:windowBackground">@color/window_background</item>
+  </style>
+
+  <color name="window_background_white">#FFFFFF</color>
+
+  <style name="EnableButton">
+    <item name="colorControlHighlight">@color/enable_button_ripple</item>
+  </style>
+
+  <style name="RequestAddTileServiceButton">
+    <item name="colorControlHighlight">@color/request_add_tile_service_button_ripple</item>
+  </style>
+
+  <string name="brand_icon_content_description">Touch Blocker icon</string>
+  <string name="enable_button_accessibility_service">Grant permission</string>
+  <string name="enable_button_add_floating">Enable</string>
+  <string name="enable_button_remove_floating">Remove for now</string>
+  <string name="keep_screen_on">Keep screen on</string>
+  <string name="change_screen_brightness">Dim screen</string>
+  <string name="enable_assistant">Assistant button toggle</string>
+  <string name="enable_assistant_toast">Set Touch\u00A0Blocker as the default assistant app</string>
+  <string name="enable_assistant_toast_disable">Change the default assistant app</string>
+  <string name="float_lock_view_size_label">Button size</string>
+  <string name="request_add_tile_service_button">Add quick tile</string>
+  <string name="footer"></string>
+  <string name="size_small">A-</string>
+  <string name="size_normal">A</string>
+  <string name="size_large">A+</string>
+  <string name="size_small_description">Smaller</string>
+  <string name="size_normal_description">Normal</string>
+  <string name="size_large_description">Larger</string>
+
+  <color name="primary">#111133</color>
+  <color name="accent">#4499FF</color>
+  <color name="window_background">@color/primary</color>
+  <color name="enable_button_background_tint">@color/accent</color>
+  <color name="enable_button_ripple">@color/window_background</color>
+  <color name="enable_button_text">#FFFFFF</color>
+  <color name="request_add_tile_service_button_background_tint">#222266</color>
+  <color name="request_add_tile_service_button_ripple">@color/window_background</color>
+  <color name="request_add_tile_service_button_text">#FFFFFF</color>
+
+  <dimen name="root_padding_vertical">16dp</dimen>
+  <string name="about_button">About</string>
+  <string name="about_dialog_title">About</string>
+  <string name="about_repo_label">Repository</string>
+  <string name="about_repo_url">https://github.com/Elsht666/screen-freeze</string>
+  <string name="about_developer_label">Developer</string>
+  <string name="about_developer_name">Elsht</string>
+  <string name="about_button_close">Close</string>
+</resources>

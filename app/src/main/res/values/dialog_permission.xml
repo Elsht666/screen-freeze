@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <style name="DialogPermissionStyle" parent="ThemeOverlay.MaterialComponents.Dialog.Alert.Framework">
+    <item name="android:background">@color/dialog_permission_background</item>
+  </style>
+
+  <string name="dialog_permission_title">Touch Blocker</string>
+  <string name="dialog_permission_explanation">1. Runs fully offline and locally\n2. No network access, stores no data\n3. Requires accessibility permission</string>
+  <string name="dialog_permission_button_cancel">Cancel</string>
+  <string name="dialog_permission_button_confirm">Go to settings</string>
+
+  <color name="dialog_permission_background">#1A1F38</color>
+  <color name="dialog_permission_button_text">#FFFFFF</color>
+  <color name="dialog_permission_button_cancel_background">#2A3350</color>
+  <color name="dialog_permission_button_confirm_background">#4499FF</color>
+</resources>

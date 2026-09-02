@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="dialog_permission_title">贴膜防误触</string>
+  <string name="dialog_permission_explanation">1. 应用完全离线本地运行\n2. 无联网功能，不存储任何数据\n3. 需打开无障碍权限</string>
+  <string name="dialog_permission_button_cancel">取消</string>
+  <string name="dialog_permission_button_confirm">前往设置</string>
+</resources>

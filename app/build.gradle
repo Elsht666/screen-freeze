@@ -1,0 +1,98 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+// Manifest version information!
+def versionMajor = 1
+def versionMinor = 3
+def versionPatch = 6
+def versionBuild = 0
+
+apply plugin: 'com.android.application'
+
+android {
+  namespace 'com.nightlynexus.touchblocker'
+
+  compileSdk versions.compileSdk
+
+  defaultConfig {
+    applicationId namespace
+
+    minSdkVersion 23
+    targetSdkVersion 37
+
+    versionCode versionMajor * 1000000 + versionMinor * 10000 + versionPatch * 100 + versionBuild
+    versionName "$versionMajor.$versionMinor.$versionPatch"
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_11
+    targetCompatibility JavaVersion.VERSION_11
+  }
+
+  kotlin {
+    compilerOptions {
+      jvmTarget = JvmTarget.JVM_11
+    }
+  }
+
+  lint {
+    abortOnError true
+    warningsAsErrors true
+    lintConfig rootProject.file('lint.xml')
+    textReport true
+    htmlReport true
+    htmlOutput rootProject.file("lint-reports/${name}.html")
+    // We run a full lint analysis as build part in CI, so skip vital checks for assemble tasks.
+    checkReleaseBuilds false
+  }
+
+  buildTypes {
+  }
+
+  productFlavors {
+    flavorDimensions = ['environment']
+
+    internal {
+      def gitCommitSha = 'git rev-parse --short HEAD'.execute().text.trim()
+      applicationIdSuffix '.internal'
+      versionNameSuffix "-internal-${gitCommitSha}"
+    }
+
+    production {
+    }
+  }
+
+  androidComponents {
+    onVariants(selector().all()) { variant ->
+      variant.outputs.forEach { output ->
+        def versionCode = output.versionCode.get()
+        def outputFileName = "Touch Blocker ${versionCode}.apk"
+        if (variant.flavorName == 'internal') {
+          outputFileName = 'Internal ' + outputFileName
+        }
+        output.outputFileName.set(outputFileName)
+      }
+    }
+  }
+}
+
+dependencies {
+  implementation project(':featureunlocker')
+  implementation deps.androidx.splashscreen
+  implementation deps.material
+  implementation deps.androidx.activity
+  implementation deps.androidx.annotations
+  implementation deps.androidx.appcompat
+  implementation deps.androidx.collection
+  implementation deps.androidx.core
+  implementation deps.androidx.fragment
+  implementation deps.androidx.lifecycleLivedataCore
+  implementation deps.androidx.lifecycleRuntime
+  implementation deps.androidx.lifecycleViewmodel
+  implementation deps.androidx.savedstate
+  implementation deps.kotlin.stdlibJdk8
+
+  internalImplementation deps.diskcrashreporter
+
+  testImplementation deps.junit
+  testImplementation deps.truth
+}

@@ -1,0 +1,680 @@
+package com.nightlynexus.touchblocker
+
+import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.res.Configuration
+import android.graphics.PixelFormat
+import android.graphics.Point
+import android.os.Build.VERSION.SDK_INT
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
+import android.view.GestureDetector
+import android.view.GestureDetector.SimpleOnGestureListener
+import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+import androidx.core.content.ContextCompat
+import kotlin.math.roundToInt
+
+@SuppressLint("AccessibilityPolicy") // Touch Blocker is an accessibility app.
+class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewStatus.Listener {
+  private val ACTION_START_BLOCKING_TOUCHES =
+    "com.nightlynexus.touchblocker.ACTION_START_BLOCKING_TOUCHES"
+  private val ACTION_END_BLOCKING_TOUCHES =
+    "com.nightlynexus.touchblocker.ACTION_END_BLOCKING_TOUCHES"
+  private val ACTION_TOGGLE_BLOCKING_TOUCHES =
+    "com.nightlynexus.touchblocker.ACTION_TOGGLE_BLOCKING_TOUCHES"
+  private val lockAnimateAlphaDelayMillis = 2000L
+  private val lockAnimateAlphaPerSecond = 3f
+  private val backgroundToastFadeInDurationMillis = 1000L
+  private val backgroundToastFadeOutDelayMillis = 4000L
+  private val backgroundToastFadeOutDurationMillis = 2500L
+  // Film-protection mode: hold BOTH volume keys for this long to exit.
+  private val volumeExitDelayMillis = 2000L
+
+  private var connected = false
+  private lateinit var floatingViewStatus: FloatingViewStatus
+  private lateinit var keepScreenOnStatus: KeepScreenOnStatus
+  private lateinit var changeScreenBrightnessStatus: ChangeScreenBrightnessStatus
+  private lateinit var floatingLockViewSizeStatus: FloatingLockViewSizeStatus
+  private lateinit var accessibilityPermissionRequestTracker: AccessibilityPermissionRequestTracker
+  private lateinit var windowManager: WindowManager
+  private lateinit var backgroundView: FloatingBackgroundView
+  private lateinit var backgroundViewLayoutParams: WindowManager.LayoutParams
+  private lateinit var lockView: FloatingLockView
+  private lateinit var lockViewLayoutParams: WindowManager.LayoutParams
+
+  private val mainHandler = Handler(Looper.getMainLooper())
+
+  // Volume-key press tracking for the "hold both volume keys to exit" gesture.
+  // A non-zero value means the key is currently pressed (uptimeMillis is never 0).
+  private var volumeUpDownTimeMillis = 0L
+  private var volumeDownDownTimeMillis = 0L
+  private val volumeKeyExitRunnable = Runnable {
+    // Fired after volumeExitDelayMillis; exit only if BOTH keys are still held.
+    if (volumeUpDownTimeMillis > 0L && volumeDownDownTimeMillis > 0L) {
+      exitTouchBlocking()
+    }
+  }
+
+  override fun onCreate() {
+    val application = application as TouchBlockerApplication
+    floatingViewStatus = application.floatingViewStatus
+    keepScreenOnStatus = application.keepScreenOnStatus
+    changeScreenBrightnessStatus = application.changeScreenBrightnessStatus
+    floatingLockViewSizeStatus = application.floatingLockViewSizeStatus
+    accessibilityPermissionRequestTracker = application.accessibilityPermissionRequestTracker
+  }
+
+  override fun onFloatingViewAdded() {
+    windowManager.addView(backgroundView, backgroundViewLayoutParams)
+    windowManager.addView(lockView, lockViewLayoutParams)
+  }
+
+  override fun onFloatingViewRemoved() {
+    windowManager.removeView(lockView)
+    windowManager.removeView(backgroundView)
+    lockView.resetAlpha()
+    backgroundView.cancelToast()
+    backgroundView.setHasShownToast(false)
+  }
+
+  override fun onFloatingViewLocked() {
+    backgroundView.setLocked(true)
+    lockView.setLocked(true)
+  }
+
+  override fun onFloatingViewUnlocked() {
+    backgroundView.setLocked(false)
+    lockView.setLocked(false)
+  }
+
+  override fun onFloatingViewPermissionGranted() {
+    // No-op.
+  }
+
+  override fun onFloatingViewPermissionRevoked() {
+    // No-op.
+  }
+
+  override fun onServiceConnected() {
+    connected = true
+
+    // Enable key event filtering so onKeyEvent can observe (and consume) the volume keys.
+    val serviceInfo = serviceInfo
+    serviceInfo.flags = serviceInfo.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+
+    windowManager = getSystemService(WindowManager::class.java)
+
+    val width: Int
+    val height: Int
+    val insetLeft: Int
+    val insetRight: Int
+    val insetTop: Int
+    val insetBottom: Int
+    if (SDK_INT >= 30) {
+      val currentWindowMetrics = windowManager.currentWindowMetrics
+      val bounds = currentWindowMetrics.bounds
+      width = bounds.width()
+      height = bounds.height()
+      val insets = currentWindowMetrics.windowInsets.getInsets(
+        WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+      )
+      insetLeft = insets.left
+      insetRight = insets.right
+      insetTop = insets.top
+      insetBottom = insets.bottom
+    } else {
+      @Suppress("deprecation") val display = windowManager.defaultDisplay
+      val displaySize = Point()
+      @Suppress("deprecation") display.getRealSize(displaySize)
+      width = displaySize.x
+      height = displaySize.y
+      // I don't think there's anything good we can do to prevent overlap of system bars on <30.
+      insetLeft = 0
+      insetRight = 0
+      insetTop = 0
+      insetBottom = 0
+    }
+
+    val powerInteractive = getSystemService(PowerManager::class.java).isInteractive
+    val keyguardLocked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    val screenOn = powerInteractive && !keyguardLocked
+
+    // We need both FLAG_LAYOUT_NO_LIMITS and FLAG_LAYOUT_IN_SCREEN
+    // to draw the view over the status bar.
+    // We need FLAG_FULLSCREEN to block touches to the status bar.
+    // Film-protection mode: FLAG_KEEP_SCREEN_ON is set unconditionally (ignoring the
+    // keep-screen-on preference) so the screen stays on while the film is on.
+    backgroundViewLayoutParams = WindowManager.LayoutParams(
+      width,
+      height,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_FULLSCREEN or
+        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+      PixelFormat.TRANSLUCENT
+    )
+    backgroundViewLayoutParams.screenBrightness = if (
+      changeScreenBrightnessStatus.getChangeScreenBrightness()
+    ) {
+      WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF
+    } else {
+      WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
+    backgroundView = FloatingBackgroundView(
+      this,
+      insetLeft,
+      insetTop,
+      insetRight,
+      insetBottom,
+      backgroundToastFadeInDurationMillis,
+      backgroundToastFadeOutDurationMillis,
+      backgroundToastFadeOutDelayMillis,
+      screenOn
+    ).apply {
+      setOnTouchListener(object : View.OnTouchListener {
+        private val gestureDetector = GestureDetector(
+          this@TouchBlockerAccessibilityService,
+          BackgroundViewOnGestureListener()
+        )
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+          return gestureDetector.onTouchEvent(event)
+        }
+      })
+    }
+
+    val sizeMultiplier = floatingLockViewSizeStatus.getSizeMultiplier()
+    val lockWidth = lockWidth(sizeMultiplier)
+    val lockHeight = lockHeight(sizeMultiplier)
+    val maxOutOfScreenBounds = maxOutOfScreenBounds(sizeMultiplier)
+    val minX = -maxOutOfScreenBounds
+    val minY = -maxOutOfScreenBounds
+    val maxX = width - lockWidth + maxOutOfScreenBounds
+    val maxY = height - lockHeight + maxOutOfScreenBounds
+    val maxMoveDistanceForClick = resources.getDimension(R.dimen.max_move_distance_for_click)
+    val lockAnimatePixelsPerSecond = resources.getDimensionPixelSize(
+      R.dimen.lock_animate_dips_per_second
+    )
+
+    // We need both FLAG_LAYOUT_NO_LIMITS and FLAG_LAYOUT_IN_SCREEN
+    // to draw the view over the status bar.
+    // We need FLAG_FULLSCREEN to block touches to the status bar.
+    lockViewLayoutParams = WindowManager.LayoutParams(
+      lockWidth,
+      lockHeight,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_FULLSCREEN or
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+      PixelFormat.TRANSLUCENT
+    )
+    lockViewLayoutParams.gravity = Gravity.START or Gravity.TOP
+
+    lockViewLayoutParams.x = minX
+    lockViewLayoutParams.y = (height - lockHeight) / 2
+
+    val startFadeOutListener = Runnable {
+      backgroundView.showToast()
+    }
+
+    lockView = FloatingLockView(
+      this,
+      windowManager,
+      lockViewLayoutParams,
+      maxMoveDistanceForClick,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      lockAnimatePixelsPerSecond,
+      lockAnimateAlphaPerSecond,
+      lockAnimateAlphaDelayMillis,
+      screenOn,
+      startFadeOutListener
+    ).apply {
+      setBackgroundContentCornerRadius(lockBackgroundCornerRadius(sizeMultiplier))
+      val padding = lockPadding(sizeMultiplier)
+      setPadding(padding, padding, padding, padding)
+      setOnClickListener(LockViewOnClickListener())
+    }
+
+    floatingViewStatus.addListener(this)
+    floatingViewStatus.setPermissionGranted(true)
+
+    keepScreenOnStatus.addListener(keepScreenOnStatusListener)
+    changeScreenBrightnessStatus.addListener(changeScreenBrightnessStatusListener)
+    floatingLockViewSizeStatus.addListener(floatingLockViewSizeStatusListener)
+
+    registerReceiver(screenOffBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+    registerReceiver(screenOnBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
+    registerReceiver(unlockedBroadcastReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+    // TODO: Ensure this works when we have NO keyguard. if not, maybe we check the KeyguardManager.
+
+    ContextCompat.registerReceiver(
+      this,
+      startBlockingTouchesBroadcastReceiver,
+      IntentFilter(ACTION_START_BLOCKING_TOUCHES),
+      ContextCompat.RECEIVER_EXPORTED
+    )
+    ContextCompat.registerReceiver(
+      this,
+      endBlockingTouchesBroadcastReceiver,
+      IntentFilter(ACTION_END_BLOCKING_TOUCHES),
+      ContextCompat.RECEIVER_EXPORTED
+    )
+    ContextCompat.registerReceiver(
+      this,
+      toggleBlockingTouchesBroadcastReceiver,
+      IntentFilter(ACTION_TOGGLE_BLOCKING_TOUCHES),
+      ContextCompat.RECEIVER_EXPORTED
+    )
+
+    if (accessibilityPermissionRequestTracker.recentlyLaunchedAccessibilityPermissionRequest()) {
+      startActivity(
+        Intent(
+          this,
+          LauncherActivity::class.java
+        ).addFlags(
+          Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP
+        )
+      )
+    }
+  }
+
+  private val keepScreenOnStatusListener =
+    object : KeepScreenOnStatus.Listener {
+      override fun update(keepScreenOn: Boolean) {
+        // Film-protection mode: always keep the screen on, regardless of the setting.
+        backgroundViewLayoutParams.flags =
+          backgroundViewLayoutParams.flags or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        if (floatingViewStatus.added) {
+          windowManager.updateViewLayout(backgroundView, backgroundViewLayoutParams)
+        }
+      }
+    }
+
+  private val changeScreenBrightnessStatusListener =
+    object : ChangeScreenBrightnessStatus.Listener {
+      override fun update(changeScreenBrightness: Boolean) {
+        backgroundViewLayoutParams.screenBrightness = if (
+          changeScreenBrightness
+        ) {
+          WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF
+        } else {
+          WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        if (floatingViewStatus.added) {
+          windowManager.updateViewLayout(backgroundView, backgroundViewLayoutParams)
+        }
+      }
+    }
+
+  private val floatingLockViewSizeStatusListener =
+    object : FloatingLockViewSizeStatus.Listener {
+      override fun update(sizeMultiplier: Float) {
+        changeLockSize(sizeMultiplier)
+      }
+    }
+
+  private fun changeLockSize(sizeMultiplier: Float) {
+    val width: Int
+    val height: Int
+    if (SDK_INT >= 30) {
+      val currentWindowMetrics = windowManager.currentWindowMetrics
+      val bounds = currentWindowMetrics.bounds
+      width = bounds.width()
+      height = bounds.height()
+    } else {
+      @Suppress("deprecation") val display = windowManager.defaultDisplay
+      val displaySize = Point()
+      @Suppress("deprecation") display.getRealSize(displaySize)
+      width = displaySize.x
+      height = displaySize.y
+    }
+
+    val lockWidth = lockWidth(sizeMultiplier)
+    val lockHeight = lockHeight(sizeMultiplier)
+    val maxOutOfScreenBounds = maxOutOfScreenBounds(sizeMultiplier)
+    val minX = -maxOutOfScreenBounds
+    val minY = -maxOutOfScreenBounds
+    val maxX = width - lockWidth + maxOutOfScreenBounds
+    val maxY = height - lockHeight + maxOutOfScreenBounds
+
+    val oldX = lockViewLayoutParams.x
+    val oldY = lockViewLayoutParams.y
+    val oldMinX = lockView.minX
+    val oldMaxX = lockView.maxX
+    val oldMinY = lockView.minY
+    val oldMaxY = lockView.maxY
+
+    val x = ((oldX - oldMinX) * (maxX - minX) / (oldMaxX - oldMinX).toFloat()).roundToInt() + minX
+    val y = ((oldY - oldMinY) * (maxY - minY) / (oldMaxY - oldMinY).toFloat()).roundToInt() + minY
+
+    lockViewLayoutParams.width = lockWidth
+    lockViewLayoutParams.height = lockHeight
+
+    lockView.reset(x, y, minX, minY, maxX, maxY)
+
+    lockView.setBackgroundContentCornerRadius(lockBackgroundCornerRadius(sizeMultiplier))
+    val lockPadding = lockPadding(sizeMultiplier)
+    lockView.setPadding(lockPadding, lockPadding, lockPadding, lockPadding)
+
+    if (floatingViewStatus.added) {
+      windowManager.updateViewLayout(lockView, lockViewLayoutParams)
+    }
+  }
+
+  override fun onDestroy() {
+    if (floatingViewStatus.locked) {
+      unlock()
+    }
+    if (floatingViewStatus.added) {
+      floatingViewStatus.setAdded(false)
+    }
+    floatingViewStatus.setPermissionGranted(false)
+    floatingViewStatus.removeListener(this)
+    keepScreenOnStatus.removeListener(keepScreenOnStatusListener)
+    changeScreenBrightnessStatus.removeListener(changeScreenBrightnessStatusListener)
+    floatingLockViewSizeStatus.removeListener(floatingLockViewSizeStatusListener)
+    unregisterReceiver(screenOffBroadcastReceiver)
+    unregisterReceiver(screenOnBroadcastReceiver)
+    unregisterReceiver(unlockedBroadcastReceiver)
+    unregisterReceiver(startBlockingTouchesBroadcastReceiver)
+    unregisterReceiver(endBlockingTouchesBroadcastReceiver)
+    unregisterReceiver(toggleBlockingTouchesBroadcastReceiver)
+    mainHandler.removeCallbacks(volumeKeyExitRunnable)
+  }
+
+  private inner class BackgroundViewOnGestureListener : SimpleOnGestureListener() {
+    override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+      if (e.actionMasked == MotionEvent.ACTION_UP) {
+        lockView.fadeIn()
+        return true
+      }
+      return false
+    }
+  }
+
+  private inner class LockViewOnClickListener : View.OnClickListener {
+    override fun onClick(v: View) {
+      if (floatingViewStatus.locked) {
+        unlock()
+      } else {
+        lock()
+      }
+    }
+  }
+
+  private fun lock() {
+    floatingViewStatus.setLocked(true)
+  }
+
+  private fun unlock() {
+    floatingViewStatus.setLocked(false)
+  }
+
+  override fun onToggle() {
+    if (floatingViewStatus.added) {
+      if (floatingViewStatus.locked) {
+        unlock()
+        floatingViewStatus.setAdded(false)
+      } else {
+        lock()
+        lockView.resetFadeTimer()
+      }
+    } else {
+      if (floatingViewStatus.locked) {
+        throw IllegalStateException("Not added but locked.")
+      } else {
+        floatingViewStatus.setAdded(true)
+        lock()
+        lockView.resetFadeTimer()
+      }
+    }
+  }
+
+  private val screenOffBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      backgroundView.setScreenOn(false)
+      lockView.setScreenOn(false)
+    }
+  }
+
+  private val screenOnBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+        return
+      }
+      backgroundView.setScreenOn(true)
+      lockView.setScreenOn(true)
+    }
+  }
+
+  private val unlockedBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      backgroundView.setScreenOn(true)
+      lockView.setScreenOn(true)
+    }
+  }
+
+  private val startBlockingTouchesBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (floatingViewStatus.added) {
+        if (floatingViewStatus.locked) {
+          // Already blocking touches.
+        } else {
+          lock()
+          lockView.resetFadeTimer()
+        }
+      } else {
+        if (floatingViewStatus.locked) {
+          throw IllegalStateException("Not added but locked.")
+        } else {
+          floatingViewStatus.setAdded(true)
+          lock()
+          lockView.resetFadeTimer()
+        }
+      }
+    }
+  }
+
+  private val endBlockingTouchesBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (floatingViewStatus.added) {
+        if (floatingViewStatus.locked) {
+          unlock()
+          floatingViewStatus.setAdded(false)
+        } else {
+          // Already not blocking touches.
+        }
+      } else {
+        // Already not blocking touches.
+      }
+    }
+  }
+
+  private val toggleBlockingTouchesBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      floatingViewStatus.toggle()
+    }
+  }
+
+  override fun onAccessibilityEvent(event: AccessibilityEvent) {
+    // No-op.
+  }
+
+  override fun onInterrupt() {
+    // No-op.
+  }
+
+  // Film-protection mode exit gesture: hold BOTH volume keys for volumeExitDelayMillis.
+  // Every volume key event is consumed (return true) so the system volume never changes
+  // while the film is on.
+  override fun onKeyEvent(event: KeyEvent): Boolean {
+    val keyCode = event.keyCode
+    if (keyCode != KeyEvent.KEYCODE_VOLUME_UP && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
+      return super.onKeyEvent(event)
+    }
+    val now = SystemClock.uptimeMillis()
+    when (keyCode) {
+      KeyEvent.KEYCODE_VOLUME_UP -> {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+          volumeUpDownTimeMillis = now
+          maybeScheduleVolumeExit()
+        } else if (event.action == KeyEvent.ACTION_UP) {
+          volumeUpDownTimeMillis = 0L
+          mainHandler.removeCallbacks(volumeKeyExitRunnable)
+        }
+      }
+      KeyEvent.KEYCODE_VOLUME_DOWN -> {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+          volumeDownDownTimeMillis = now
+          maybeScheduleVolumeExit()
+        } else if (event.action == KeyEvent.ACTION_UP) {
+          volumeDownDownTimeMillis = 0L
+          mainHandler.removeCallbacks(volumeKeyExitRunnable)
+        }
+      }
+    }
+    // Consume the volume key events so they do not change the system volume.
+    return true
+  }
+
+  private fun maybeScheduleVolumeExit() {
+    if (volumeUpDownTimeMillis > 0L && volumeDownDownTimeMillis > 0L) {
+      mainHandler.removeCallbacks(volumeKeyExitRunnable)
+      mainHandler.postDelayed(volumeKeyExitRunnable, volumeExitDelayMillis)
+    }
+  }
+
+  private fun exitTouchBlocking() {
+    mainHandler.removeCallbacks(volumeKeyExitRunnable)
+    // Remove the overlay before stopping the service.
+    if (floatingViewStatus.added) {
+      if (floatingViewStatus.locked) {
+        unlock()
+      }
+      floatingViewStatus.setAdded(false)
+    }
+    stopSelf()
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    if (!connected) {
+      return
+    }
+
+    val width: Int
+    val height: Int
+    val insetLeft: Int
+    val insetRight: Int
+    val insetTop: Int
+    val insetBottom: Int
+    if (SDK_INT >= 30) {
+      val currentWindowMetrics = windowManager.currentWindowMetrics
+      val bounds = currentWindowMetrics.bounds
+      width = bounds.width()
+      height = bounds.height()
+      val insets = currentWindowMetrics.windowInsets.getInsets(
+        WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+      )
+      insetLeft = insets.left
+      insetRight = insets.right
+      insetTop = insets.top
+      insetBottom = insets.bottom
+    } else {
+      @Suppress("deprecation") val display = windowManager.defaultDisplay
+      val displaySize = Point()
+      @Suppress("deprecation") display.getRealSize(displaySize)
+      width = displaySize.x
+      height = displaySize.y
+      // I don't think there's anything good we can do to prevent overlap of system bars on <30.
+      insetLeft = 0
+      insetRight = 0
+      insetTop = 0
+      insetBottom = 0
+    }
+
+    backgroundViewLayoutParams.width = width
+    backgroundViewLayoutParams.height = height
+
+    backgroundView.reconfigureToast(insetLeft, insetTop, insetRight, insetBottom)
+
+    val sizeMultiplier = floatingLockViewSizeStatus.getSizeMultiplier()
+    val lockWidth = lockWidth(sizeMultiplier)
+    val lockHeight = lockHeight(sizeMultiplier)
+    val maxOutOfScreenBounds = maxOutOfScreenBounds(sizeMultiplier)
+    val minX = -maxOutOfScreenBounds
+    val minY = -maxOutOfScreenBounds
+    val maxX = width - lockWidth + maxOutOfScreenBounds
+    val maxY = height - lockHeight + maxOutOfScreenBounds
+
+    val x = (lockViewLayoutParams.x * (maxX - minX) / (lockView.maxX - lockView.minX).toFloat())
+      .roundToInt()
+    val y = (lockViewLayoutParams.y * (maxY - minY) / (lockView.maxY - lockView.minY).toFloat())
+      .roundToInt()
+    lockView.reset(x, y, minX, minY, maxX, maxY)
+
+    if (floatingViewStatus.added) {
+      windowManager.updateViewLayout(backgroundView, backgroundViewLayoutParams)
+      windowManager.updateViewLayout(lockView, lockViewLayoutParams)
+    }
+
+    // If we switched between gesture navigation and the button navigation bar, backgroundView needs
+    // to set its system ui flags.
+    backgroundView.requestApplyInsets()
+  }
+
+  private fun lockWidth(sizeMultiplier: Float): Int {
+    val width = resources.getDimensionPixelSize(
+      R.dimen.lock_width
+    )
+    return (width * sizeMultiplier).roundToInt()
+  }
+
+  private fun lockHeight(sizeMultiplier: Float): Int {
+    val height = resources.getDimensionPixelSize(
+      R.dimen.lock_height
+    )
+    return (height * sizeMultiplier).roundToInt()
+  }
+
+  private fun lockPadding(sizeMultiplier: Float): Int {
+    val padding = resources.getDimensionPixelSize(
+      R.dimen.lock_padding
+    )
+    return (padding * sizeMultiplier).roundToInt()
+  }
+
+  private fun lockBackgroundCornerRadius(sizeMultiplier: Float): Float {
+    val maxOutOfScreenBounds = resources.getDimensionPixelSize(
+      R.dimen.lock_background_corner_radius
+    )
+    return maxOutOfScreenBounds * sizeMultiplier
+  }
+
+  private fun maxOutOfScreenBounds(sizeMultiplier: Float): Int {
+    val maxOutOfScreenBounds = resources.getDimensionPixelSize(
+      R.dimen.max_out_of_screen_bounds
+    )
+    return (maxOutOfScreenBounds * sizeMultiplier).roundToInt()
+  }
+}

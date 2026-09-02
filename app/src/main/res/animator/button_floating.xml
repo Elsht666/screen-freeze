@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- 按压态：阴影收拢 + 轻微缩小（反馈） -->
+  <item android:state_pressed="true">
+    <set>
+      <objectAnimator
+          android:duration="120"
+          android:propertyName="translationZ"
+          android:valueFrom="8dp"
+          android:valueTo="1dp"
+          android:valueType="floatType" />
+      <objectAnimator
+          android:duration="120"
+          android:propertyName="scaleX"
+          android:valueFrom="1.0"
+          android:valueTo="0.96"
+          android:valueType="floatType" />
+      <objectAnimator
+          android:duration="120"
+          android:propertyName="scaleY"
+          android:valueFrom="1.0"
+          android:valueTo="0.96"
+          android:valueType="floatType" />
+    </set>
+  </item>
+  <!-- 悬浮/默认态：阴影托起 -->
+  <item>
+    <set>
+      <objectAnimator
+          android:duration="150"
+          android:propertyName="translationZ"
+          android:valueFrom="1dp"
+          android:valueTo="8dp"
+          android:valueType="floatType" />
+      <objectAnimator
+          android:duration="150"
+          android:propertyName="scaleX"
+          android:valueFrom="0.96"
+          android:valueTo="1.0"
+          android:valueType="floatType" />
+      <objectAnimator
+          android:duration="150"
+          android:propertyName="scaleY"
+          android:valueFrom="0.96"
+          android:valueTo="1.0"
+          android:valueType="floatType" />
+    </set>
+  </item>
+</selector>
