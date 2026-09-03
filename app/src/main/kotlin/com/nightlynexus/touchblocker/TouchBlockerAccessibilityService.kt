@@ -394,8 +394,12 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     if (floatingViewStatus.locked) {
       unlock()
     }
+    // Remove the overlay views WITHOUT clearing the persisted "added" state, so the
+    // floating lock is restored automatically the next time the service connects
+    // (e.g. after the OS stops/restarts the service). Only an explicit user action
+    // (temporarily remove / volume-key exit) clears the persisted state.
     if (floatingViewStatus.added) {
-      floatingViewStatus.setAdded(false)
+      onFloatingViewRemoved()
     }
     floatingViewStatus.setPermissionGranted(false)
     floatingViewStatus.removeListener(this)
