@@ -9,6 +9,7 @@ class TouchBlockerApplication : Application() {
   internal lateinit var keepScreenOnStatus: KeepScreenOnStatus
   internal lateinit var changeScreenBrightnessStatus: ChangeScreenBrightnessStatus
   internal lateinit var floatingLockViewSizeStatus: FloatingLockViewSizeStatus
+  internal lateinit var floatingLockBackgroundColorStatus: FloatingLockBackgroundColorStatus
   internal lateinit var shouldRequestAddTileServiceStatus: ShouldRequestAddTileServiceStatus
   internal lateinit var accessibilityPermissionRequestTracker: AccessibilityPermissionRequestTracker
   internal lateinit var featureUnlocker: FeatureUnlocker
@@ -38,6 +39,12 @@ class TouchBlockerApplication : Application() {
     floatingLockViewSizeStatus = FloatingLockViewSizeStatus(
       getSharedPreferences(
         "floating_lock_view_size_status",
+        MODE_PRIVATE
+      )
+    )
+    floatingLockBackgroundColorStatus = FloatingLockBackgroundColorStatus(
+      getSharedPreferences(
+        "floating_lock_background_color_status",
         MODE_PRIVATE
       )
     )

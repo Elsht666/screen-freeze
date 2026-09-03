@@ -1,15 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:layout_gravity="center_horizontal|bottom"
-    android:layout_marginLeft="64dp"
-    android:layout_marginRight="64dp"
+    android:layout_marginLeft="48dp"
+    android:layout_marginRight="48dp"
     android:layout_marginBottom="@dimen/lock_background_toast_margin_bottom"
     android:background="@drawable/lock_background_toast_background"
-    android:gravity="center_horizontal"
-    android:lineSpacingMultiplier="1.2"
-    android:padding="16dp"
-    android:text="@string/lock_background_toast"
-    android:textColor="@color/lock_background_toast_text"
-    android:textSize="20sp" />
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/background_toast_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/lock_background_toast_title"
+        android:textColor="#00E676"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/background_toast_line1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="start"
+        android:lineSpacingMultiplier="1.3"
+        android:textColor="@color/lock_background_toast_text"
+        android:textSize="17sp" />
+
+</LinearLayout>

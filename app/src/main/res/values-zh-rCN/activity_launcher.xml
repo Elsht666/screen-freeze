@@ -25,4 +25,6 @@
   <string name="about_developer_label">开发者</string>
   <string name="about_developer_name">Elsht</string>
   <string name="about_button_close">关闭</string>
+  <string name="service_down_banner">正在恢复无障碍服务（约30秒），点此立即恢复</string>
+  <string name="color_picker_title">锁屏背景颜色</string>
 </resources>

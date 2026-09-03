@@ -7,7 +7,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Point
@@ -15,11 +14,9 @@ import android.os.Build.VERSION.SDK_INT
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
-import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
@@ -36,19 +33,21 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     "com.nightlynexus.touchblocker.ACTION_END_BLOCKING_TOUCHES"
   private val ACTION_TOGGLE_BLOCKING_TOUCHES =
     "com.nightlynexus.touchblocker.ACTION_TOGGLE_BLOCKING_TOUCHES"
+  private val ACTION_REQUEST_RESTORE_OVERLAY =
+    "com.nightlynexus.touchblocker.ACTION_REQUEST_RESTORE_OVERLAY"
+  private val ACTION_LOCK =
+    "com.nightlynexus.touchblocker.ACTION_LOCK"
   private val lockAnimateAlphaDelayMillis = 2000L
   private val lockAnimateAlphaPerSecond = 3f
   private val backgroundToastFadeInDurationMillis = 1000L
-  private val backgroundToastFadeOutDelayMillis = 4000L
+  private val backgroundToastFadeOutDelayMillis = 2000L
   private val backgroundToastFadeOutDurationMillis = 2500L
-  // Film-protection mode: hold BOTH volume keys for this long to exit.
-  private val volumeExitDelayMillis = 2000L
-
   private var connected = false
   private lateinit var floatingViewStatus: FloatingViewStatus
   private lateinit var keepScreenOnStatus: KeepScreenOnStatus
   private lateinit var changeScreenBrightnessStatus: ChangeScreenBrightnessStatus
   private lateinit var floatingLockViewSizeStatus: FloatingLockViewSizeStatus
+  private lateinit var floatingLockBackgroundColorStatus: FloatingLockBackgroundColorStatus
   private lateinit var accessibilityPermissionRequestTracker: AccessibilityPermissionRequestTracker
   private lateinit var windowManager: WindowManager
   private lateinit var backgroundView: FloatingBackgroundView
@@ -58,16 +57,14 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
 
   private val mainHandler = Handler(Looper.getMainLooper())
 
-  // Volume-key press tracking for the "hold both volume keys to exit" gesture.
-  // A non-zero value means the key is currently pressed (uptimeMillis is never 0).
-  private var volumeUpDownTimeMillis = 0L
-  private var volumeDownDownTimeMillis = 0L
-  private val volumeKeyExitRunnable = Runnable {
-    // Fired after volumeExitDelayMillis; exit only if BOTH keys are still held.
-    if (volumeUpDownTimeMillis > 0L && volumeDownDownTimeMillis > 0L) {
-      exitTouchBlocking()
+  private var overlayAdded = false
+
+  private val floatingLockBackgroundColorStatusListener =
+    object : FloatingLockBackgroundColorStatus.Listener {
+      override fun update(color: Int) {
+        backgroundView.setLockBackgroundColor(color)
+      }
     }
-  }
 
   override fun onCreate() {
     val application = application as TouchBlockerApplication
@@ -75,17 +72,20 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     keepScreenOnStatus = application.keepScreenOnStatus
     changeScreenBrightnessStatus = application.changeScreenBrightnessStatus
     floatingLockViewSizeStatus = application.floatingLockViewSizeStatus
+    floatingLockBackgroundColorStatus = application.floatingLockBackgroundColorStatus
     accessibilityPermissionRequestTracker = application.accessibilityPermissionRequestTracker
   }
 
   override fun onFloatingViewAdded() {
     windowManager.addView(backgroundView, backgroundViewLayoutParams)
     windowManager.addView(lockView, lockViewLayoutParams)
+    overlayAdded = true
   }
 
   override fun onFloatingViewRemoved() {
     windowManager.removeView(lockView)
     windowManager.removeView(backgroundView)
+    overlayAdded = false
     lockView.resetAlpha()
     backgroundView.cancelToast()
     backgroundView.setHasShownToast(false)
@@ -94,6 +94,11 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
   override fun onFloatingViewLocked() {
     backgroundView.setLocked(true)
     lockView.setLocked(true)
+    // Show the floating lock and the hint together; both then fade out after a few
+    // seconds. Double-tapping the screen brings both back.
+    lockView.resetAlpha()
+    lockView.resetFadeTimer()
+    backgroundView.showHint()
   }
 
   override fun onFloatingViewUnlocked() {
@@ -111,10 +116,6 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
 
   override fun onServiceConnected() {
     connected = true
-
-    // Enable key event filtering so onKeyEvent can observe (and consume) the volume keys.
-    val serviceInfo = serviceInfo
-    serviceInfo.flags = serviceInfo.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
 
     windowManager = getSystemService(WindowManager::class.java)
 
@@ -186,6 +187,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       backgroundToastFadeOutDelayMillis,
       screenOn
     ).apply {
+      setLockBackgroundColor(floatingLockBackgroundColorStatus.getColor())
       setOnTouchListener(object : View.OnTouchListener {
         private val gestureDetector = GestureDetector(
           this@TouchBlockerAccessibilityService,
@@ -230,7 +232,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     lockViewLayoutParams.y = (height - lockHeight) / 2
 
     val startFadeOutListener = Runnable {
-      backgroundView.showToast()
+      backgroundView.fadeOutHint()
     }
 
     lockView = FloatingLockView(
@@ -260,6 +262,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     keepScreenOnStatus.addListener(keepScreenOnStatusListener)
     changeScreenBrightnessStatus.addListener(changeScreenBrightnessStatusListener)
     floatingLockViewSizeStatus.addListener(floatingLockViewSizeStatusListener)
+    floatingLockBackgroundColorStatus.addListener(floatingLockBackgroundColorStatusListener)
 
     registerReceiver(screenOffBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
     registerReceiver(screenOnBroadcastReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
@@ -284,13 +287,32 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       IntentFilter(ACTION_TOGGLE_BLOCKING_TOUCHES),
       ContextCompat.RECEIVER_EXPORTED
     )
+    ContextCompat.registerReceiver(
+      this,
+      restoreOverlayBroadcastReceiver,
+      IntentFilter(ACTION_REQUEST_RESTORE_OVERLAY),
+      ContextCompat.RECEIVER_EXPORTED
+    )
+    ContextCompat.registerReceiver(
+      this,
+      lockBroadcastReceiver,
+      IntentFilter(ACTION_LOCK),
+      ContextCompat.RECEIVER_EXPORTED
+    )
 
     // Restore the floating overlay if it was enabled before the service was restarted
     // (e.g. after the OS reclaimed the process in the background). Without this the
     // floating lock would silently disappear even though the accessibility switch is
     // still enabled.
     if (floatingViewStatus.added) {
-      onFloatingViewAdded()
+      try {
+        onFloatingViewAdded()
+        floatingViewStatus.recordDiagnostic("服务连接 悬浮锁已恢复上屏", "service")
+      } catch (e: Exception) {
+        floatingViewStatus.recordDiagnostic("服务连接 恢复失败: ${e.javaClass.simpleName} ${e.message}", "service")
+      }
+    } else {
+      floatingViewStatus.recordDiagnostic("服务连接 状态未开启 不恢复", "service")
     }
 
     if (accessibilityPermissionRequestTracker.recentlyLaunchedAccessibilityPermissionRequest()) {
@@ -406,19 +428,22 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     keepScreenOnStatus.removeListener(keepScreenOnStatusListener)
     changeScreenBrightnessStatus.removeListener(changeScreenBrightnessStatusListener)
     floatingLockViewSizeStatus.removeListener(floatingLockViewSizeStatusListener)
+    floatingLockBackgroundColorStatus.removeListener(floatingLockBackgroundColorStatusListener)
     unregisterReceiver(screenOffBroadcastReceiver)
     unregisterReceiver(screenOnBroadcastReceiver)
     unregisterReceiver(unlockedBroadcastReceiver)
     unregisterReceiver(startBlockingTouchesBroadcastReceiver)
     unregisterReceiver(endBlockingTouchesBroadcastReceiver)
     unregisterReceiver(toggleBlockingTouchesBroadcastReceiver)
-    mainHandler.removeCallbacks(volumeKeyExitRunnable)
+    unregisterReceiver(restoreOverlayBroadcastReceiver)
+    unregisterReceiver(lockBroadcastReceiver)
   }
 
   private inner class BackgroundViewOnGestureListener : SimpleOnGestureListener() {
     override fun onDoubleTapEvent(e: MotionEvent): Boolean {
       if (e.actionMasked == MotionEvent.ACTION_UP) {
         lockView.fadeIn()
+        backgroundView.showHint()
         return true
       }
       return false
@@ -427,11 +452,13 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
 
   private inner class LockViewOnClickListener : View.OnClickListener {
     override fun onClick(v: View) {
+      // Tapping the floating lock ALWAYS exits film mode and returns to the start
+      // screen (removes the floating lock). There is no "unlock to lock again"
+      // intermediate state anymore.
       if (floatingViewStatus.locked) {
         unlock()
-      } else {
-        lock()
       }
+      floatingViewStatus.setAdded(false, source = "lock_tap_remove")
     }
   }
 
@@ -447,7 +474,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     if (floatingViewStatus.added) {
       if (floatingViewStatus.locked) {
         unlock()
-        floatingViewStatus.setAdded(false)
+        floatingViewStatus.setAdded(false, source = "toggle_off")
       } else {
         lock()
         lockView.resetFadeTimer()
@@ -456,7 +483,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       if (floatingViewStatus.locked) {
         throw IllegalStateException("Not added but locked.")
       } else {
-        floatingViewStatus.setAdded(true)
+        floatingViewStatus.setAdded(true, source = "toggle_on")
         lock()
         lockView.resetFadeTimer()
       }
@@ -505,7 +532,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
         if (floatingViewStatus.locked) {
           throw IllegalStateException("Not added but locked.")
         } else {
-          floatingViewStatus.setAdded(true)
+          floatingViewStatus.setAdded(true, source = "start_broadcast")
           lock()
           lockView.resetFadeTimer()
         }
@@ -518,7 +545,7 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       if (floatingViewStatus.added) {
         if (floatingViewStatus.locked) {
           unlock()
-          floatingViewStatus.setAdded(false)
+          floatingViewStatus.setAdded(false, source = "end_broadcast")
         } else {
           // Already not blocking touches.
         }
@@ -534,68 +561,31 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
     }
   }
 
+  private val restoreOverlayBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      // The user just opened the app: bring the floating lock back if it is enabled
+      // but the overlay is not currently on screen.
+      if (floatingViewStatus.added && !overlayAdded) {
+        onFloatingViewAdded()
+      }
+    }
+  }
+
+  private val lockBroadcastReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      // Launcher tapped "Enable": go straight into film-protection (locked) mode.
+      if (floatingViewStatus.added && !floatingViewStatus.locked) {
+        lock()
+      }
+    }
+  }
+
   override fun onAccessibilityEvent(event: AccessibilityEvent) {
     // No-op.
   }
 
   override fun onInterrupt() {
     // No-op.
-  }
-
-  // Film-protection mode exit gesture: hold BOTH volume keys for volumeExitDelayMillis.
-  // Volume keys are only consumed (return true) while film-protection mode is active
-  // (overlay added AND locked), so the system volume never changes while the film is on
-  // but keeps working normally outside of film mode.
-  override fun onKeyEvent(event: KeyEvent): Boolean {
-    if (!floatingViewStatus.added || !floatingViewStatus.locked) {
-      return false
-    }
-    val keyCode = event.keyCode
-    if (keyCode != KeyEvent.KEYCODE_VOLUME_UP && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
-      return super.onKeyEvent(event)
-    }
-    val now = SystemClock.uptimeMillis()
-    when (keyCode) {
-      KeyEvent.KEYCODE_VOLUME_UP -> {
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-          volumeUpDownTimeMillis = now
-          maybeScheduleVolumeExit()
-        } else if (event.action == KeyEvent.ACTION_UP) {
-          volumeUpDownTimeMillis = 0L
-          mainHandler.removeCallbacks(volumeKeyExitRunnable)
-        }
-      }
-      KeyEvent.KEYCODE_VOLUME_DOWN -> {
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-          volumeDownDownTimeMillis = now
-          maybeScheduleVolumeExit()
-        } else if (event.action == KeyEvent.ACTION_UP) {
-          volumeDownDownTimeMillis = 0L
-          mainHandler.removeCallbacks(volumeKeyExitRunnable)
-        }
-      }
-    }
-    // Consume the volume key events so they do not change the system volume.
-    return true
-  }
-
-  private fun maybeScheduleVolumeExit() {
-    if (volumeUpDownTimeMillis > 0L && volumeDownDownTimeMillis > 0L) {
-      mainHandler.removeCallbacks(volumeKeyExitRunnable)
-      mainHandler.postDelayed(volumeKeyExitRunnable, volumeExitDelayMillis)
-    }
-  }
-
-  private fun exitTouchBlocking() {
-    mainHandler.removeCallbacks(volumeKeyExitRunnable)
-    // Remove the overlay before stopping the service.
-    if (floatingViewStatus.added) {
-      if (floatingViewStatus.locked) {
-        unlock()
-      }
-      floatingViewStatus.setAdded(false)
-    }
-    stopSelf()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

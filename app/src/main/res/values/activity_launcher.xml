@@ -60,4 +60,6 @@
   <string name="about_developer_label">Developer</string>
   <string name="about_developer_name">Elsht</string>
   <string name="about_button_close">Close</string>
+  <string name="service_down_banner">Restoring accessibility service (~30s), tap to restore now</string>
+  <string name="color_picker_title">Lock screen background color</string>
 </resources>

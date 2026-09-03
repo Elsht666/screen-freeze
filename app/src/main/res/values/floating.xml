@@ -1,9 +1,10 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="lock_content_description_unlocked">Lock</string>
   <string name="lock_content_description_locked">Unlock</string>
-  <string name="lock_background_toast">To unhide the unlock\u00A0button,\n<b>double tap</b> the screen</string>
-
+  <string name="lock_background_toast_title">Unlock methods</string>
+  <string name="lock_background_toast_line1">Method 1: &lt;font color="#FFC107"&gt;&lt;b&gt;double tap&lt;/b&gt;&lt;/font&gt; screen, &lt;font color="#FFC107"&gt;&lt;b&gt;tap&lt;/b&gt;&lt;/font&gt; the lock</string>
+  
   <color name="lock_background">#88224488</color>
   <color name="lock_background_ripple">#FFFFFF</color>
   <color name="lock_background_toast_background">@color/window_background</color>

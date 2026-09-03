@@ -51,10 +51,10 @@ class TouchBlockerTileService : TileService() {
       val qsTile = qsTile
       // Skip the FloatingViewStatus.Listener that would call updateTileService unnecessarily.
       if (floatingViewStatus.added) {
-        floatingViewStatus.setAdded(false, skip = floatingViewStatusListener)
+        floatingViewStatus.setAdded(false, skip = floatingViewStatusListener, source = "tile_off")
         qsTile.state = Tile.STATE_INACTIVE
       } else {
-        floatingViewStatus.setAdded(true, skip = floatingViewStatusListener)
+        floatingViewStatus.setAdded(true, skip = floatingViewStatusListener, source = "tile_on")
         qsTile.state = Tile.STATE_ACTIVE
       }
       qsTile.updateTile()

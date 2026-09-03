@@ -5,10 +5,12 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build.VERSION.SDK_INT
+import android.text.Html
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewPropertyAnimator
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -26,16 +28,21 @@ internal class FloatingBackgroundView(
 ) : FrameLayout(context) {
   private val exclusionRects = listOf(Rect())
   private var backgroundToastView: View
+  private var backgroundToastLine1: TextView
   private var locked = false
   private var hasShownToast = false
   private var backgroundToastViewAlphaAnimator: ViewPropertyAnimator? = null
 
   init {
-    // Film-protection mode: solid white (opaque #FFFFFFFF) full-screen overlay background.
-    setBackgroundColor(Color.WHITE)
+    // Film-protection mode: solid (opaque) full-screen overlay background, default white.
+    setLockBackgroundColor(Color.WHITE)
 
     val inflater = LayoutInflater.from(context)
     backgroundToastView = inflater.inflate(R.layout.background_toast, this, false)
+    backgroundToastLine1 = backgroundToastView.findViewById(R.id.background_toast_line1)
+    backgroundToastLine1.setText(
+      Html.fromHtml(context.getString(R.string.lock_background_toast_line1), Html.FROM_HTML_MODE_COMPACT)
+    )
     (backgroundToastView.layoutParams as LayoutParams).apply {
       setMargins(
         leftMargin + insetLeft,
@@ -61,6 +68,10 @@ internal class FloatingBackgroundView(
       setHideNavigation(SDK_INT >= 29 && systemGestures.left != 0 && systemGestures.right != 0)
       insets
     }
+  }
+
+  fun setLockBackgroundColor(color: Int) {
+    setBackgroundColor(color)
   }
 
   fun setLocked(locked: Boolean) {
@@ -95,34 +106,45 @@ internal class FloatingBackgroundView(
     this.hasShownToast = hasShownToast
   }
 
-  fun showToast() {
-    if (hasShownToast) {
-      return
-    }
+  // Show the film-mode hint (3 lines) together with the floating lock. Both stay
+  // visible for backgroundToastFadeOutDelayMillis, then fade out together.
+  fun showHint() {
+    backgroundToastViewAlphaAnimator?.cancel()
     backgroundToastView.visibility = VISIBLE
+    backgroundToastView.alpha = 1f
     backgroundToastViewAlphaAnimator = backgroundToastView.animate()
-      .alpha(1f)
-      .setDuration(backgroundToastFadeInDurationMillis)
-      // We have to set the start delay, or else we will get the
-      // backgroundToastFadeOutDelayMillis when coming back here.
-      // The View caches the ViewPropertyAnimator instance.
-      .setStartDelay(0L)
+      .alpha(0f)
+      .setDuration(backgroundToastFadeOutDurationMillis)
+      .setStartDelay(backgroundToastFadeOutDelayMillis)
       .withEndAction {
-        hasShownToast = true
-        backgroundToastViewAlphaAnimator = backgroundToastView.animate()
-          .alpha(0f)
-          .setDuration(backgroundToastFadeOutDurationMillis)
-          .setStartDelay(backgroundToastFadeOutDelayMillis)
-          .withEndAction {
-            backgroundToastView.visibility = GONE
-          }
-          .apply {
-            start()
-          }
+        backgroundToastView.visibility = GONE
       }
       .apply {
         start()
       }
+  }
+
+  // Called when the floating lock fades out: fade the hint out in sync.
+  fun fadeOutHint() {
+    backgroundToastViewAlphaAnimator?.cancel()
+    if (backgroundToastView.alpha == 0f) {
+      backgroundToastView.visibility = GONE
+      return
+    }
+    backgroundToastViewAlphaAnimator = backgroundToastView.animate()
+      .alpha(0f)
+      .setDuration(backgroundToastFadeOutDurationMillis)
+      .setStartDelay(0L)
+      .withEndAction {
+        backgroundToastView.visibility = GONE
+      }
+      .apply {
+        start()
+      }
+  }
+
+  fun showToast() {
+    showHint()
   }
 
   fun cancelToast() {
@@ -142,6 +164,10 @@ internal class FloatingBackgroundView(
     removeView(backgroundToastView)
     val inflater = LayoutInflater.from(context)
     backgroundToastView = inflater.inflate(R.layout.background_toast, this, false)
+    backgroundToastLine1 = backgroundToastView.findViewById(R.id.background_toast_line1)
+    backgroundToastLine1.setText(
+      Html.fromHtml(context.getString(R.string.lock_background_toast_line1), Html.FROM_HTML_MODE_COMPACT)
+    )
     (backgroundToastView.layoutParams as LayoutParams).apply {
       setMargins(
         leftMargin + insetLeft,

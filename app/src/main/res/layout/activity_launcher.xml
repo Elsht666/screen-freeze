@@ -62,6 +62,23 @@
             android:minHeight="32dp"
             android:src="@drawable/brand_icon" />
 
+        <TextView
+            android:id="@+id/service_down_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:background="@drawable/about_button_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:minHeight="44dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp"
+            android:text="@string/service_down_banner"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/enable"
             android:layout_width="wrap_content"
@@ -77,57 +94,33 @@
             android:theme="@style/EnableButton" />
 
         <LinearLayout
-            android:id="@+id/size_controls"
+            android:id="@+id/color_section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:gravity="center"
-            android:orientation="horizontal"
-            android:visibility="gone">
+            android:orientation="vertical"
+            android:layout_marginTop="28dp">
 
-          <Button
-              android:id="@+id/size_small"
-              android:layout_width="0dp"
+          <TextView
+              android:id="@+id/color_label"
+              android:layout_width="match_parent"
               android:layout_height="wrap_content"
-              android:layout_weight="1"
-              android:layout_marginEnd="8dp"
-              android:backgroundTint="@color/request_add_tile_service_button_background_tint"
-              android:minWidth="0dp"
-              android:padding="16dp"
-              android:text="@string/size_small"
-              android:textAllCaps="false"
-              android:textColor="@color/request_add_tile_service_button_text"
-              android:textSize="20sp"
-              android:theme="@style/RequestAddTileServiceButton" />
+              android:gravity="center"
+              android:text="@string/color_picker_title"
+              android:textColor="#CCCCCC"
+              android:textSize="14sp" />
 
-          <Button
-              android:id="@+id/size_normal"
-              android:layout_width="0dp"
-              android:layout_height="wrap_content"
-              android:layout_weight="1"
-              android:layout_marginEnd="8dp"
-              android:backgroundTint="@color/request_add_tile_service_button_background_tint"
-              android:minWidth="0dp"
-              android:padding="16dp"
-              android:text="@string/size_normal"
-              android:textAllCaps="false"
-              android:textColor="@color/request_add_tile_service_button_text"
-              android:textSize="20sp"
-              android:theme="@style/RequestAddTileServiceButton" />
-
-          <Button
-              android:id="@+id/size_large"
-              android:layout_width="0dp"
-              android:layout_height="wrap_content"
-              android:layout_weight="1"
-              android:backgroundTint="@color/request_add_tile_service_button_background_tint"
-              android:minWidth="0dp"
-              android:padding="16dp"
-              android:text="@string/size_large"
-              android:textAllCaps="false"
-              android:textColor="@color/request_add_tile_service_button_text"
-              android:textSize="20sp"
-              android:theme="@style/RequestAddTileServiceButton" />
+          <View
+              android:id="@+id/color_preview"
+              android:layout_width="56dp"
+              android:layout_height="56dp"
+              android:layout_gravity="center_horizontal"
+              android:layout_marginTop="10dp"
+              android:background="@drawable/color_preview_oval"
+              android:clickable="true"
+              android:contentDescription="@string/color_picker_title"
+              android:focusable="true" />
         </LinearLayout>
       </LinearLayout>
 

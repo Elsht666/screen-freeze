@@ -2,8 +2,6 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:accessibilityEventTypes=""
-    android:accessibilityFlags="flagRequestFilterKeyEvents"
-    android:canRequestFilterKeyEvents="true"
     android:description="@string/accessibility_service_description"
     android:intro="@string/accessibility_service_intro"
     android:summary="@string/accessibility_service_summary"

@@ -2,5 +2,6 @@
 <resources>
   <string name="lock_content_description_unlocked">锁定</string>
   <string name="lock_content_description_locked">解锁</string>
-  <string name="lock_background_toast">要重新显示解锁按钮\n请<font color="#00E676"><b>双击</b></font>屏幕</string>
-</resources>
+  <string name="lock_background_toast_title">解锁方式</string>
+  <string name="lock_background_toast_line1">方式1：&lt;font color="#FFC107"&gt;&lt;b&gt;双击&lt;/b&gt;&lt;/font&gt;屏幕 &lt;font color="#FFC107"&gt;&lt;b&gt;点击&lt;/b&gt;&lt;/font&gt;锁扣</string>
+  </resources>

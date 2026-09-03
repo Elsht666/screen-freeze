@@ -51,8 +51,8 @@ internal class FloatingLockView(
       null
     )
 
-    setImageResource(R.drawable.lock_open_right_24px)
-    contentDescription = context.getText(R.string.lock_content_description_unlocked)
+    setImageResource(R.drawable.lock_24px)
+    contentDescription = context.getText(R.string.lock_content_description_locked)
     locked = false
 
     if (!screenOn) {
@@ -65,14 +65,13 @@ internal class FloatingLockView(
   }
 
   fun setLocked(locked: Boolean) {
-    if (locked) {
-      setImageResource(R.drawable.lock_24px)
-      contentDescription = context.getText(R.string.lock_content_description_locked)
-      this.locked = true
-    } else {
-      setImageResource(R.drawable.lock_open_right_24px)
-      contentDescription = context.getText(R.string.lock_content_description_unlocked)
-      this.locked = false
+    // There is no separate "unlocked" floating-lock state anymore: the floating lock
+    // always shows the locked icon. Tapping it always exits film mode back to the
+    // start screen (see LockViewOnClickListener in the service).
+    setImageResource(R.drawable.lock_24px)
+    contentDescription = context.getText(R.string.lock_content_description_locked)
+    this.locked = locked
+    if (!locked) {
       // The ACTION_DOWN touch event calls fadeIn() which calls cancelTimerToFadeOut(),
       // but fadeIn() then calls setTimerToFadeOut() if alpha is still at 1f.
       cancelTimerToFadeOut()
