@@ -311,6 +311,15 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
       } catch (e: Exception) {
         floatingViewStatus.recordDiagnostic("服务连接 恢复失败: ${e.javaClass.simpleName} ${e.message}", "service")
       }
+      // Self-heal: if the user tapped "Enable" while the service was still
+      // reconnecting (so the ACTION_LOCK broadcast was dropped before the receiver
+      // registered), lock now that the service is connected. This guarantees that
+      // tapping "Enable" always leads to the film-protection (locked) screen.
+      if (!floatingViewStatus.locked) {
+        lock()
+        lockView.resetFadeTimer()
+        floatingViewStatus.recordDiagnostic("服务连接 自动锁定兜底", "service")
+      }
     } else {
       floatingViewStatus.recordDiagnostic("服务连接 状态未开启 不恢复", "service")
     }
@@ -574,8 +583,13 @@ class TouchBlockerAccessibilityService : AccessibilityService(), FloatingViewSta
   private val lockBroadcastReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
       // Launcher tapped "Enable": go straight into film-protection (locked) mode.
+      floatingViewStatus.recordDiagnostic(
+        "收到锁定广播 added=${floatingViewStatus.added} locked=${floatingViewStatus.locked}",
+        "lock_broadcast"
+      )
       if (floatingViewStatus.added && !floatingViewStatus.locked) {
         lock()
+        floatingViewStatus.recordDiagnostic("锁定广播 已进入锁定", "lock_broadcast")
       }
     }
   }

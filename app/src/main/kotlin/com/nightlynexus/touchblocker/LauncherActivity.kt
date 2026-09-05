@@ -2,8 +2,6 @@ package com.nightlynexus.touchblocker
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -16,7 +14,6 @@ import android.view.accessibility.AccessibilityManager
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class LauncherActivity :
@@ -162,11 +159,16 @@ class LauncherActivity :
       var attempts = 0
       override fun run() {
         if (!floatingViewStatus.added) return
-        if (isAccessibilityServiceRunning()) {
+        val running = isAccessibilityServiceRunning()
+        if (running) {
+          floatingViewStatus.recordDiagnostic("点击开启 服务在运行 发送锁定广播", "launcher")
           sendBroadcast(Intent("com.nightlynexus.touchblocker.ACTION_LOCK"))
         } else if (attempts < 30) {
           attempts++
+          floatingViewStatus.recordDiagnostic("点击开启 服务未运行 第${attempts}次等待", "launcher")
           launcherRoot.postDelayed(this, 2000)
+        } else {
+          floatingViewStatus.recordDiagnostic("点击开启 等待服务超时(60s)", "launcher")
         }
       }
     }
@@ -197,6 +199,9 @@ class LauncherActivity :
     // ~2s interval; give up after ~90s and reset the stale enabled state.
     if (attempt >= 45) {
       if (floatingViewStatus.added) {
+        if (floatingViewStatus.locked) {
+          floatingViewStatus.setLocked(false)
+        }
         floatingViewStatus.setAdded(false, source = "auto_reset_stale")
       }
       return
@@ -222,6 +227,12 @@ class LauncherActivity :
     // accessibility service automatically). Rotation / configuration changes are excluded.
     if (!isChangingConfigurations && floatingViewStatus.added) {
       floatingViewStatus.recordDiagnostic("检测到退出，自动归置为关闭", "auto_reset_exit")
+      // Also clear the in-memory "locked" flag: it survives in the still-alive
+      // accessibility service, and a stale locked=true blocks the next "Enable" tap
+      // (lockBroadcastReceiver only locks when !locked).
+      if (floatingViewStatus.locked) {
+        floatingViewStatus.setLocked(false)
+      }
       floatingViewStatus.setAdded(false, source = "auto_reset_exit")
     }
     floatingViewStatus.removeListener(this)
